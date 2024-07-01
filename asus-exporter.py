@@ -4,6 +4,7 @@ import base64
 import os
 import json
 from prometheus_client import start_http_server, Gauge
+from re import sub
 
 
 #data total = {
@@ -18,7 +19,30 @@ uptime_metric = Gauge('uptime', 'Uptime of the router')
 memory_total_metric = Gauge('memory_total', 'Total memory of the router')
 memory_free_metric = Gauge('memory_free', 'Free memory of the router')
 memory_used_metric = Gauge('memory_used', 'Used memory of the router')
+cpu1_percent_metric = Gauge('cpu1_percent', 'CPU1 usage of the router')
+cpu2_percent_metric = Gauge('cpu2_percent', 'CPU2 usage of the router')
+cpu3_percent_metric = Gauge('cpu3_percent', 'CPU3 usage of the router')
+cpu4_percent_metric = Gauge('cpu4_percent', 'CPU4 usage of the router')
 
+def health_check():
+    # check if all env variables are set
+    if os.getenv('ASUS_USERNAME') is None:
+        print("ASUS_USERNAME is not set")
+        exit(1)
+    if os.getenv('ASUS_PASSWORD') is None: 
+        print("ASUS_PASSWORD is not set")
+        exit(1)
+    if os.getenv('ASUS_IP') is None:
+        #check if the IP is just an IP
+        if os.getenv('ASUS_IP').count('.') != 3:
+            print("ASUS_IP is not set")
+            exit(1)
+        print("ASUS_IP is not set")
+        exit(1)
+
+def sanitize_string(data):
+    #remove all non-numeric characters
+    return sub(r"\D", "", data)
 
 def parse_payload(payload):
     #print(payload)
@@ -27,23 +51,39 @@ def parse_payload(payload):
         sanitized_format_cpu = payload.split(',')
 
         for data in sanitized_format_cpu:
-            if "cpu1_total" in data:
-                cpu1_total = data.split(':')[2].strip()
-            elif "cpu1_usage" in data:
-                cpu1_usage = data.split(':')[1].strip()
-            elif "cpu2_total" in data:
-                cpu2_total = data.split(':')[1].strip()
-            elif "cpu2_usage" in data:
-                cpu2_usage = data.split(':')[1].strip()
-            elif "cpu3_total" in data:
-                cpu3_total = data.split(':')[1].strip()
-            elif "cpu3_usage" in data:
-                cpu3_usage = data.split(':')[1].strip()
-            elif "cpu4_total" in data:
-                cpu4_total = data.split(':')[1].strip()
-            elif "cpu4_usage" in data:
-                cpu4_usage = data.split(':')[1].strip()
-       
+            try:
+                if "cpu1_total" in data:
+                    #We use sub to remove all non-numeric characters
+                    cpu1_total = sanitize_string(data.split(':')[2])
+                elif "cpu1_usage" in data:
+                    cpu1_usage = sanitize_string(data.split(':')[1])
+                    cpu1_percent = (float(cpu1_usage) / float(cpu1_total)) * 100
+                elif "cpu2_total" in data:
+                    cpu2_total = sanitize_string(data.split(':')[1])
+                elif "cpu2_usage" in data:
+                    cpu2_usage = sanitize_string(data.split(':')[1])
+                    cpu2_percent = (float(cpu2_usage) / float(cpu2_total)) * 100
+                elif "cpu3_total" in data:
+                    cpu3_total = sanitize_string(data.split(':')[1])
+                elif "cpu3_usage" in data:
+                    cpu3_usage = sanitize_string(data.split(':')[1])
+                    cpu3_percent = (float(cpu3_usage) / float(cpu3_total)) * 100
+                elif "cpu4_total" in data:
+                    cpu4_total = sanitize_string(data.split(':')[1])
+                elif "cpu4_usage" in data:
+                    cpu4_usage = sanitize_string(data.split(':')[1])
+                    cpu4_percent = (float(cpu4_usage) / float(cpu4_total)) * 100
+
+             
+                
+            except Exception as e:
+                print(e)
+                print('Something went wrong with the CPU metrics')
+        cpu1_percent_metric.set(cpu1_percent)
+        cpu2_percent_metric.set(cpu2_percent)
+        cpu3_percent_metric.set(cpu3_percent)
+        cpu4_percent_metric.set(cpu4_percent)
+    
     if "memory_usage" in payload:
         memory_usage_list = payload.split(',')
         sanitized_format_memory = memory_usage_list
@@ -108,12 +148,12 @@ def login_router():
 
 def main():
     print("Starting Prometheus ASUS Router")
+    health_check()
     start_http_server(8000)
 
     while True:
         login_router()
         sleep(5)
-
 
 if __name__ == '__main__':
     main()

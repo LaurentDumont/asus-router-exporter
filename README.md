@@ -7,3 +7,13 @@
       A["Prometheus Server"]-->|TCP port 8000| B["asus-exporter"];
       B --> |TCP 80/443| C["Asus AX 4200"]
 ```
+
+### Building the exporter
+```
+docker build . -t asus-exporter
+```
+
+### Running the exporter
+```
+docker run -e ASUS_USERNAME=admin -e ASUS_PASSWORD=potato -e ASUS_IP=192.168.50.1 -p 8000:8000 --name asus-exporter asus-exporter
+```
