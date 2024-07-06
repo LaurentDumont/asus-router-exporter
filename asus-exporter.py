@@ -23,6 +23,7 @@ cpu1_percent_metric = Gauge('cpu1_percent', 'CPU1 usage of the router')
 cpu2_percent_metric = Gauge('cpu2_percent', 'CPU2 usage of the router')
 cpu3_percent_metric = Gauge('cpu3_percent', 'CPU3 usage of the router')
 cpu4_percent_metric = Gauge('cpu4_percent', 'CPU4 usage of the router')
+active_device_metric = Gauge('active_device', 'Active devices connected to the router', ['ip_address', 'device_name', 'connection_type', 'metric', 'mac_address'])
 
 def health_check():
     # check if all env variables are set
@@ -107,7 +108,40 @@ def parse_payload(payload):
             #print(uptime_seconds)
             uptime_metric.set(uptime_seconds)
 
-    
+    elif "get_clientlist" in payload:
+        json_payload = json.loads(payload)
+        #print(json_payload)
+        for device in json_payload['get_clientlist']['maclist']:
+            current_device = json_payload['get_clientlist'][device]
+            # Device is wired only - no wireless statistics
+            if current_device['isWL'] == '0':
+                continue
+            print(current_device)
+            if current_device['name'] == '':
+                current_device['name'] = current_device['mac']
+            active_device_metric.labels(ip_address=current_device['ip'],
+                                        device_name=current_device['name'], 
+                                        connection_type='wireless',
+                                        metric='Current RX speed Mb',
+                                        mac_address=current_device['mac']).set(float(current_device['curRx']))
+            active_device_metric.labels(ip_address=current_device['ip'],
+                                        device_name=current_device['name'], 
+                                        connection_type='wireless',
+                                        metric='Current TX speed Mb',
+                                        mac_address=current_device['mac']).set(float(current_device['curTx']))
+            active_device_metric.labels(ip_address=current_device['ip'],
+                                        device_name=current_device['name'], 
+                                        connection_type='wireless',
+                                        metric='RSSI',
+                                        mac_address=current_device['mac']).set(float(current_device['rssi']))
+            
+            total_connected_time = current_device['wlConnectTime'].split(':')
+            total_connected_time_seconds = (int(total_connected_time[0]) * 3600) + (int(total_connected_time[1]) * 60) + int(total_connected_time[2])
+            active_device_metric.labels(ip_address=current_device['ip'],
+                                        device_name=current_device['name'], 
+                                        connection_type='wireless',
+                                        metric='Time connected to wireless network',
+                                        mac_address=current_device['mac']).set(float(total_connected_time_seconds))
 
 def login_router():
     router_username = os.getenv('ASUS_USERNAME')
@@ -129,7 +163,7 @@ def login_router():
     #print(token)
 
     #payload_list = ["uptime()", "memory_usage()", "cpu_usage()", "get_clientlist()", "netdev(appobj)", "wanlink()"]
-    payload_list = ["uptime()", "memory_usage()", "cpu_usage()"]
+    payload_list = ["uptime()", "memory_usage()", "cpu_usage()", "get_clientlist()"]
 
     headers = {
     'user-Agent': "asusrouter-Android-DUTUtil-1.0.0.245",
