@@ -46,7 +46,7 @@ def sanitize_string(data):
     return sub(r"\D", "", data)
 
 def parse_payload(payload):
-    #print(payload)
+    print(payload)
 
     if "cpu_usage" in payload:
         sanitized_format_cpu = payload.split(',')
