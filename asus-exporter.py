@@ -1,10 +1,10 @@
 from time import sleep
 import requests
 import base64
-import os
+from os import getenv
 import json
 from prometheus_client import start_http_server, Gauge
-from re import sub
+from re import sub, compile, findall
 
 
 #data total = {
@@ -24,18 +24,47 @@ cpu2_percent_metric = Gauge('cpu2_percent', 'CPU2 usage of the router')
 cpu3_percent_metric = Gauge('cpu3_percent', 'CPU3 usage of the router')
 cpu4_percent_metric = Gauge('cpu4_percent', 'CPU4 usage of the router')
 active_device_metric = Gauge('active_device', 'Active devices connected to the router', ['ip_address', 'device_name', 'connection_type', 'metric', 'mac_address'])
+wan_status = Gauge('wan_information', 'WAN information', ['wan_status', 'wan_type','wan_ip', 'wan_netmask', 'wan_gateway', 'wan_dns'])
+wan_lease = Gauge('wan_lease', 'Length of the lease in seconds')
+wan_expires = Gauge('wan_expires', 'Time when the lease expires in seconds')
+
+
+# Thank you to our benevolent AI overlords for this regex
+def parse_wanlink_status(wanlink_status_str):
+    pattern = compile(r"function\s+(\w+)\(\)\s+\{\s+return\s+([^;]+);")
+    matches = pattern.findall(wanlink_status_str)
+    
+    wanlink_status = {}
+    for match in matches:
+        key, value = match
+        if value.isdigit():
+            wanlink_status[key] = int(value)
+        elif value.replace('.', '').isdigit():
+            wanlink_status[key] = value
+        else:
+            wanlink_status[key] = value.strip("'")
+
+    wan_status.labels(wanlink_status['wanlink_status'],
+                      wanlink_status['wanlink_type'],
+                      wanlink_status['wanlink_ipaddr'],
+                      wanlink_status['wanlink_netmask'],
+                      wanlink_status['wanlink_gateway'],
+                      wanlink_status['wanlink_dns'],
+                      ).set(float(4242))
+    wan_lease.set(float(wanlink_status['wanlink_lease']))
+    wan_expires.set(float(wanlink_status['wanlink_expires']))
 
 def health_check():
     # check if all env variables are set
-    if os.getenv('ASUS_USERNAME') is None:
+    if getenv('ASUS_USERNAME') is None:
         print("ASUS_USERNAME is not set")
         exit(1)
-    if os.getenv('ASUS_PASSWORD') is None: 
+    if getenv('ASUS_PASSWORD') is None: 
         print("ASUS_PASSWORD is not set")
         exit(1)
-    if os.getenv('ASUS_IP') is None:
+    if getenv('ASUS_IP') is None:
         #check if the IP is just an IP
-        if os.getenv('ASUS_IP').count('.') != 3:
+        if getenv('ASUS_IP').count('.') != 3:
             print("ASUS_IP is not set")
             exit(1)
         print("ASUS_IP is not set")
@@ -46,7 +75,7 @@ def sanitize_string(data):
     return sub(r"\D", "", data)
 
 def parse_payload(payload):
-    print(payload)
+    #print(payload)
 
     if "cpu_usage" in payload:
         sanitized_format_cpu = payload.split(',')
@@ -116,7 +145,7 @@ def parse_payload(payload):
             # Device is wired only - no wireless statistics
             if current_device['isWL'] == '0':
                 continue
-            print(current_device)
+            #print(current_device)
             if current_device['name'] == '':
                 current_device['name'] = current_device['mac']
             active_device_metric.labels(ip_address=current_device['ip'],
@@ -142,11 +171,13 @@ def parse_payload(payload):
                                         connection_type='wireless',
                                         metric='Time connected to wireless network',
                                         mac_address=current_device['mac']).set(float(total_connected_time_seconds))
+    elif "wanlink" in payload:
+        parse_wanlink_status(payload)
 
 def login_router():
-    router_username = os.getenv('ASUS_USERNAME')
-    router_password = os.getenv('ASUS_PASSWORD')
-    asus_ip = os.getenv('ASUS_IP')
+    router_username = getenv('ASUS_USERNAME')
+    router_password = getenv('ASUS_PASSWORD')
+    asus_ip = getenv('ASUS_IP')
     account = f"{router_username}:{router_password}"
 
     string_bytes = account.encode('ascii')
@@ -163,7 +194,7 @@ def login_router():
     #print(token)
 
     #payload_list = ["uptime()", "memory_usage()", "cpu_usage()", "get_clientlist()", "netdev(appobj)", "wanlink()"]
-    payload_list = ["uptime()", "memory_usage()", "cpu_usage()", "get_clientlist()"]
+    payload_list = ["uptime()", "memory_usage()", "cpu_usage()", "get_clientlist()", "wanlink()"]
 
     headers = {
     'user-Agent': "asusrouter-Android-DUTUtil-1.0.0.245",
@@ -186,8 +217,12 @@ def main():
     start_http_server(8000)
 
     while True:
-        login_router()
-        sleep(5)
+        try:
+            login_router()
+            sleep(5)
+        except Exception as e:
+            sleep(5)
+            print('Failed to login to the router')
 
 if __name__ == '__main__':
     main()
