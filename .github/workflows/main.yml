@@ -32,7 +32,7 @@ jobs:
         python-version: '3.10'
         cache: 'pip' 
     - run: pip install -r requirements.txt
-    - run: black --diff asus-exporter.py.py
+    - run: black --diff asus-exporter.py
 
   run-bandit:
     runs-on: ubuntu-24.04 
@@ -43,7 +43,7 @@ jobs:
         python-version: '3.10'
         cache: 'pip' 
     - run: pip install -r requirements.txt
-    - run: bandit -r asus-exporter.py.py --verbose
+    - run: bandit -r asus-exporter.py --verbose
 
   run-mypy:
     runs-on: ubuntu-24.04 
@@ -54,4 +54,4 @@ jobs:
         python-version: '3.10'
         cache: 'pip' 
     - run: pip install -r requirements.txt
-    - run: mypy asus-exporter.py.py
+    - run: mypy asus-exporter.py
