@@ -44,6 +44,9 @@ def parse_wanlink_status(wanlink_status_str):
         else:
             wanlink_status[key] = value.strip("'")
 
+    # We clear the metrics before setting them to avoid stale data
+    # TO-DO More elegant solution to prevent creating a new Gauge because of the label changing value
+    wan_status.clear()
     wan_status.labels(wanlink_status['wanlink_status'],
                       wanlink_status['wanlink_type'],
                       wanlink_status['wanlink_ipaddr'],

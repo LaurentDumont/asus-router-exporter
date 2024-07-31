@@ -4,13 +4,12 @@ FROM python:3.13-rc-alpine3.20
 # Set the working directory in the container
 WORKDIR /app
 
-RUN apk update && apk add python3-dev \
+RUN apk --no-cache update && apk --no-cache add python3-dev \
     gcc \
     libc-dev
 
 # Copy the current directory contents into the container at /app
-COPY requirements.txt /app
-COPY asus-exporter.py /app
+COPY requirements.txt asus-exporter.py /app/
 
 # Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
